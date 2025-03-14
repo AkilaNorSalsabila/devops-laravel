@@ -1,37 +1,52 @@
 pipeline {
-    agent { label 'docker' }
+    agent any 
 
     stages {
-        stage('Install Dependencies') {
+        stage('Checkout') {
             steps {
-                script {
-                    docker.image('php:8.2').inside {
-                        sh 'apt-get update'
-                        sh 'apt-get install -y unzip'
-                        sh 'composer install'
-                    }
-                }
+                checkout scm
             }
         }
-        
-        stage('Testing') {
-            steps {
-                script {
-                    docker.image('debian').inside {
-                        sh 'echo "Ini adalah test"'
-                    }
+
+        stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'php:8.2'
+                    args '-u root'
                 }
+            }
+            steps {
+                sh 'apt-get update'
+                sh 'apt-get install -y unzip'
+                sh 'composer install'
+            }
+        }
+
+        stage('Testing') {
+            agent {
+                docker {
+                    image 'ubuntu'
+                    args '-u root'
+                }
+            }
+            steps {
+                sh 'echo "Running Tests..."'
+                // Tambahkan command untuk menjalankan PHPUnit atau testing lain
             }
         }
 
         stage('Deploy to Production') {
+            agent {
+                docker {
+                    image 'agung3wi/alpine-rsync:1.1'
+                    args '-u root'
+                }
+            }
             steps {
-                script {
-                    docker.image('agung3wi/alpine').inside {
-                        sh 'mkdir -p ~/.ssh'
-                        sh 'ssh-keyscan -H "$PROD_HOST" > ~/.ssh/known_hosts'
-                        sh 'rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/'
-                    }
+                sshagent (credentials: ['ssh-prod']) {
+                    sh 'mkdir -p ~/.ssh'
+                    sh 'ssh-keyscan -H "$PROD_HOST" > ~/.ssh/known_hosts'
+                    sh "rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/"
                 }
             }
         }
