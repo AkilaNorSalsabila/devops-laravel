@@ -1,24 +1,10 @@
 pipeline {
-    agent any  // Gunakan agen yang tersedia
+    agent any
 
     stages {
         stage('Checkout') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        sh '''
-                        if [ -d ".git" ]; then
-                            echo "Repo sudah ada, melakukan git pull..."
-                            git reset --hard
-                            git clean -fd
-                            git pull origin main
-                        else
-                            echo "Repo belum ada, melakukan git clone..."
-                            git clone --branch main https://$GITHUB_TOKEN@github.com/AkilaNorSalsabila/devops-laravel.git .
-                        fi
-                        '''
-                    }
-                }
+                git branch: 'main', url: 'https://github.com/AkilaNorSalsabila/devops-laravel.git'
             }
         }
 
@@ -30,7 +16,8 @@ pipeline {
                 }
             }
             steps {
-                sh 'apt-get update && apt-get install -y unzip git'
+                sh 'apt-get update && apt-get install -y unzip git curl'
+                sh 'curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer'
                 sh 'rm -f composer.lock'
                 sh 'composer install --no-interaction --prefer-dist --no-progress'
             }
@@ -50,9 +37,7 @@ pipeline {
 
         stage('Deploy to Production') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                    sh 'rsync -rav --delete ./ ./deploy-directory/'
-                }
+                sh 'rsync -rav --delete ./ ./deploy-directory/'
             }
         }
     }
