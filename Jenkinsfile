@@ -32,21 +32,13 @@ pipeline {
         }
 
         stage('Install Dependencies') {
-            agent {
-                docker {
-                    image 'php:8.2-cli'
-                    args '--user root'
-                }
-            }
             steps {
                 sh '''
                     echo "Updating system and installing required dependencies..."
-                    apt-get update && apt-get install -y unzip git curl zip \
+                    sudo apt-get update && sudo apt-get install -y unzip git curl zip \
                         libzip-dev libonig-dev libpng-dev libjpeg-dev \
-                        libfreetype6-dev libmcrypt-dev libxml2-dev php-dom \
-                        && docker-php-ext-configure zip \
-                        && docker-php-ext-install zip gd mbstring pdo pdo_mysql intl xml dom
-                    
+                        libfreetype6-dev libxml2-dev php8.2-dom php8.2-cli php8.2-mbstring php8.2-xml
+
                     echo "Checking Composer installation..."
                     if ! [ -x "$(command -v composer)" ]; then
                         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -54,7 +46,7 @@ pipeline {
                     composer self-update
 
                     echo "Installing Composer dependencies..."
-                    composer install --no-dev --optimize-autoloader || composer install --ignore-platform-req=ext-dom --no-dev --optimize-autoloader
+                    composer install --no-dev --optimize-autoloader
                 '''
             }
         }
