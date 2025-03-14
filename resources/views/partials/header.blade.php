@@ -27,7 +27,7 @@ route('pages.index') }}">Home</a>
 </li>
 <li class="nav-item">
 <a class="nav-link" href="{{ route('pages.prestasi')
-}}">Prestasi</a>
+}}">Prestasi2</a>
 </li>
 </ul>
 </div>
