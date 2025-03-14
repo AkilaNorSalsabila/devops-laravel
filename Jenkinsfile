@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel.git'
+        GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel'
         DEPLOY_DIR = '/home/akilanor/deploy-directory'
         COMPOSER_HOME = '/root/.composer'
     }
