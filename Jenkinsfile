@@ -37,7 +37,7 @@ pipeline {
                         libzip-dev libonig-dev libpng-dev libjpeg-dev \
                         libfreetype6-dev libxml2-dev php8.2-curl php8.2-mbstring \
                         php8.2-xml php8.2-tokenizer php8.2-dom php8.2-zip php8.2-bcmath \
-                        php8.2-xmlwriter rsync || echo "Failed to install dependencies"
+                        php8.2-xmlwriter php8.2-mysql rsync || echo "Failed to install dependencies"
 
                     echo "Checking Composer installation..."
                     if ! [ -x "$(command -v composer)" ]; then
@@ -51,12 +51,37 @@ pipeline {
             }
         }
 
+        stage('Configure Environment') {
+            steps {
+                script {
+                    sh '''
+                        echo "Configuring Laravel environment..."
+                        cp .env.example .env
+
+                        sed -i 's|APP_ENV=.*|APP_ENV=testing|' .env
+                        sed -i 's|APP_URL=.*|APP_URL=http://localhost|' .env
+                        sed -i 's|DB_CONNECTION=.*|DB_CONNECTION=mysql|' .env
+                        sed -i 's|DB_HOST=.*|DB_HOST=127.0.0.1|' .env
+                        sed -i 's|DB_PORT=.*|DB_PORT=3306|' .env
+                        sed -i 's|DB_DATABASE=.*|DB_DATABASE=laravel|' .env
+                        sed -i 's|DB_USERNAME=.*|DB_USERNAME=root|' .env
+                        sed -i 's|DB_PASSWORD=.*|DB_PASSWORD=|' .env
+
+                        php artisan key:generate
+                    '''
+                }
+            }
+        }
+
         stage('Run Tests') {
             steps {
                 script {
                     def testsFailed = false
                     try {
                         sh '''
+                            echo "Starting MySQL service..."
+                            service mysql start || echo "Failed to start MySQL"
+
                             echo "Preparing application for testing..."
                             php artisan config:clear
                             php artisan cache:clear
