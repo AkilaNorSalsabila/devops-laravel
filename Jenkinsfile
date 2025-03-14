@@ -1,5 +1,5 @@
 pipeline {
-    agent any  // Gunakan agen apa saja yang tersedia
+    agent any
 
     environment {
         GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel.git'
@@ -12,10 +12,10 @@ pipeline {
                 script {
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: '*/main']],
+                        branches: [[name: 'main']],  // FIXED: Menghapus '*/'
                         userRemoteConfigs: [[
                             url: "${GIT_REPO}",
-                            credentialsId: 'github-token'  // Pastikan ID ini sesuai dengan yang ada di Jenkins
+                            credentialsId: 'github-token'  // Pastikan ID ini sudah ada di Jenkins
                         ]]
                     ])
                 }
@@ -31,8 +31,8 @@ pipeline {
             }
             steps {
                 sh '''
-                    apt-get update && apt-get install -y unzip git
-                    rm -f composer.lock
+                    apt-get update && apt-get install -y unzip git curl
+                    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
                     composer install --no-interaction --prefer-dist --no-progress
                 '''
             }
@@ -49,8 +49,8 @@ pipeline {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                     sh '''
                     echo "Deploying application..."
-                    mkdir -p $GIT_REPO
-                    rsync -rav --delete . ${GIT_REPO}
+                    mkdir -p $DEPLOY_DIR  # FIXED: Menggunakan direktori tujuan yang benar
+                    rsync -rav --delete . ${DEPLOY_DIR}
                     '''
                 }
             }
