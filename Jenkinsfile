@@ -46,7 +46,7 @@ pipeline {
                     composer self-update
 
                     echo "Installing Composer dependencies..."
-                    composer install --no-dev --optimize-autoloader
+                    composer install --optimize-autoloader
                 '''
             }
         }
@@ -55,7 +55,19 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'php artisan test || ./vendor/bin/phpunit'
+                        sh '''
+                            echo "Running tests..."
+                            if [ -f artisan ]; then
+                                php artisan test || echo "Laravel test command not found."
+                            fi
+                            
+                            if [ -f vendor/bin/phpunit ]; then
+                                ./vendor/bin/phpunit
+                            else
+                                echo "PHPUnit not found, skipping tests."
+                                exit 1
+                            fi
+                        '''
                     } catch (Exception e) {
                         echo "Tests failed, skipping deployment."
                         currentBuild.result = 'FAILURE'
