@@ -32,14 +32,21 @@ pipeline {
         }
 
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'php:8.2-cli'
+                    args '--user root'
+                }
+            }
             steps {
                 sh '''
                     echo "Updating system and installing required dependencies..."
-                    apt-get update && apt-get install -y unzip git curl zip libzip-dev libonig-dev libpng-dev \
-                        libjpeg-dev libfreetype6-dev libmcrypt-dev libxml2-dev unzip php-dom \
+                    apt-get update && apt-get install -y unzip git curl zip \
+                        libzip-dev libonig-dev libpng-dev libjpeg-dev \
+                        libfreetype6-dev libmcrypt-dev libxml2-dev php-dom \
                         && docker-php-ext-configure zip \
                         && docker-php-ext-install zip gd mbstring pdo pdo_mysql intl xml dom
-
+                    
                     echo "Checking Composer installation..."
                     if ! [ -x "$(command -v composer)" ]; then
                         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -54,11 +61,21 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                sh 'php artisan test'
+                script {
+                    try {
+                        sh 'php artisan test || ./vendor/bin/phpunit'
+                    } catch (Exception e) {
+                        echo "Tests failed, skipping deployment."
+                        currentBuild.result = 'FAILURE'
+                    }
+                }
             }
         }
 
         stage('Deploy to Production') {
+            when {
+                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+            }
             steps {
                 withCredentials([string(credentialsId: 'github-token', variable: 'GIT_CREDENTIALS')]) {
                     sh '''
