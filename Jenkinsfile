@@ -36,16 +36,18 @@ pipeline {
                 sh '''
                     echo "Updating system and installing required dependencies..."
                     apt-get update && apt-get install -y unzip git curl zip libzip-dev libonig-dev libpng-dev \
-                        libjpeg-dev libfreetype6-dev libmcrypt-dev libxml2-dev unzip \
+                        libjpeg-dev libfreetype6-dev libmcrypt-dev libxml2-dev unzip php-dom \
                         && docker-php-ext-configure zip \
-                        && docker-php-ext-install zip gd mbstring pdo pdo_mysql intl xml
+                        && docker-php-ext-install zip gd mbstring pdo pdo_mysql intl xml dom
 
                     echo "Checking Composer installation..."
                     if ! [ -x "$(command -v composer)" ]; then
                         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
                     fi
                     composer self-update
-                    composer install --no-dev --optimize-autoloader
+
+                    echo "Installing Composer dependencies..."
+                    composer install --no-dev --optimize-autoloader || composer install --ignore-platform-req=ext-dom --no-dev --optimize-autoloader
                 '''
             }
         }
