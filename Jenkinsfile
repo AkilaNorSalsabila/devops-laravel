@@ -6,7 +6,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        sh 'git clone https://${GITHUB_TOKEN}@github.com/AkilaNorSalsabila/devops-laravel.git'
+                        sh 'git clone https://$GITHUB_TOKEN@github.com/AkilaNorSalsabila/devops-laravel.git'
                     }
                 }
             }
@@ -48,14 +48,11 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'ssh-prod', keyFileVariable: 'SSH_KEY')]) {
-                        sh '''
-                        mkdir -p ~/.ssh
-                        echo "$SSH_KEY" > ~/.ssh/id_rsa
-                        chmod 600 ~/.ssh/id_rsa
-                        ssh-keyscan -H "$PROD_HOST" >> ~/.ssh/known_hosts
-                        rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/
-                        '''
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh 'curl -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                            -H "Accept: application/vnd.github.v3+json" \
+                            https://api.github.com/repos/AkilaNorSalsabila/devops-laravel/actions/workflows/deploy.yml/dispatches \
+                            -d "{\\"ref\\":\\"main\\"}"'
                     }
                 }
             }
