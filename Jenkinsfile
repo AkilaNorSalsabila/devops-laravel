@@ -1,10 +1,25 @@
 pipeline {
     agent any 
 
+    environment {
+        GIT_REPO = 'git@github.com:AkilaNorSalsabila/devops-laravel.git'
+        SSH_USER = 'ubuntu'
+        SSH_HOST = 'prod.kelasdevops.xyz'
+        SSH_DIR = "/home/${SSH_USER}/prod.kelasdevops.xyz/"
+        SSH_OPTS = '-o StrictHostKeyChecking=no'
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                sshagent(['ssh-prod']) {
+                    sh '''
+                        mkdir -p ~/.ssh
+                        ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+                        ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+                        git clone $GIT_REPO laravel || (cd laravel && git pull)
+                    '''
+                }
             }
         }
 
@@ -12,13 +27,15 @@ pipeline {
             agent {
                 docker {
                     image 'php:8.2'
-                    args '-u root'
+                    args '--user root'
                 }
             }
             steps {
-                sh 'apt-get update'
-                sh 'apt-get install -y unzip'
-                sh 'composer install'
+                sh '''
+                    set -x
+                    apt-get update && apt-get install -y unzip
+                    composer install --no-interaction --prefer-dist --no-progress
+                '''
             }
         }
 
@@ -26,27 +43,32 @@ pipeline {
             agent {
                 docker {
                     image 'ubuntu'
-                    args '-u root'
+                    args '--user root'
                 }
             }
             steps {
                 sh 'echo "Running Tests..."'
-                // Tambahkan command untuk menjalankan PHPUnit atau testing lain
+                sh 'vendor/bin/phpunit --testdox'
             }
         }
 
         stage('Deploy to Production') {
             agent {
                 docker {
-                    image 'agung3wi/alpine-rsync:1.1'
-                    args '-u root'
+                    image 'agung3wi/alpine-rsync:latest'
+                    args '--user root'
                 }
             }
             steps {
                 sshagent (credentials: ['ssh-prod']) {
-                    sh 'mkdir -p ~/.ssh'
-                    sh 'ssh-keyscan -H "$PROD_HOST" > ~/.ssh/known_hosts'
-                    sh "rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/"
+                    sh '''
+                        set -x
+                        mkdir -p ~/.ssh
+                        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+                        chmod 600 ~/.ssh/id_rsa
+                        ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+                        rsync -avz -e "ssh $SSH_OPTS -i ~/.ssh/id_rsa" --delete ./laravel/ $SSH_USER@$SSH_HOST:$SSH_DIR
+                    '''
                 }
             }
         }
