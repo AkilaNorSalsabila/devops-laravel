@@ -18,15 +18,13 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                script {
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: '*/main']],
-                        userRemoteConfigs: [[
-                            url: "${GIT_REPO}",
-                            credentialsId: 'github-token'
-                        ]]
-                    ])
+                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_TOKEN')]) {
+                    script {
+                        sh '''
+                            echo "Cloning repository..."
+                            git clone https://oauth2:${GIT_TOKEN}@github.com/AkilaNorSalsabila/devops-laravel.git .
+                        '''
+                    }
                 }
             }
         }
@@ -59,11 +57,17 @@ pipeline {
                     def testsFailed = false
                     try {
                         sh '''
+                            echo "Preparing application for testing..."
+                            php artisan config:clear
+                            php artisan cache:clear
+                            php artisan config:cache
+                            php artisan migrate --force || exit 1
+
                             echo "Running Laravel tests..."
                             if [ -f artisan ]; then
                                 php artisan test || testsFailed=true
                             fi
-                            
+
                             echo "Running PHPUnit tests..."
                             if [ -x vendor/bin/phpunit ]; then
                                 ./vendor/bin/phpunit || testsFailed=true
@@ -90,7 +94,7 @@ pipeline {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
-                withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD')]) {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_TOKEN')]) {
                     sh '''
                         echo "Deploying application..."
                         mkdir -p ${DEPLOY_DIR}
