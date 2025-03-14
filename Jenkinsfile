@@ -2,85 +2,63 @@ pipeline {
     agent any
 
     environment {
-        GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel'
-        DEPLOY_DIR = '/home/akilanor/deploy-directory'
-        COMPOSER_HOME = '/root/.composer'
+        DB_HOST = "mysql-container"
+        DB_PORT = "3306"
+        DB_DATABASE = "laravel"
+        DB_USERNAME = "root"
+        DB_PASSWORD = ""
     }
 
     stages {
-        stage('Cleanup Workspace') {
+        stage('Start Database') {
             steps {
                 script {
-                    deleteDir()
+                    sh '''
+                        echo "Starting MySQL using Docker..."
+                        docker network create laravel-network || true
+                        docker run --rm -d --name mysql-container \
+                            --network=laravel-network \
+                            -e MYSQL_ROOT_PASSWORD=${DB_PASSWORD} \
+                            -e MYSQL_DATABASE=${DB_DATABASE} \
+                            -p 3306:3306 \
+                            mysql:5.7
+                        sleep 10
+                    '''
                 }
             }
         }
 
         stage('Checkout') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_TOKEN')]) {
-                    script {
+                checkout scm
+            }
+        }
+
+        stage('Build & Install Dependencies') {
+            steps {
+                script {
+                    docker.image('composer:2.6').inside('--network=laravel-network -u root') {
                         sh '''
-                            echo "Cloning repository..."
-                            git clone https://oauth2:${GIT_TOKEN}@github.com/AkilaNorSalsabila/devops-laravel.git .
+                            cp .env.example .env || true
+                            rm -f composer.lock
+                            composer install --no-interaction --prefer-dist
                         '''
                     }
                 }
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh '''
-                    echo "Installing required dependencies..."
-                    apt-get update && apt-get install -y unzip git curl zip \
-                        libzip-dev libonig-dev libpng-dev libjpeg-dev \
-                        libfreetype6-dev libxml2-dev php8.2-curl php8.2-mbstring \
-                        php8.2-xml php8.2-tokenizer php8.2-dom php8.2-zip php8.2-bcmath \
-                        php8.2-xmlwriter php8.2-mysql rsync || echo "Failed to install dependencies"
-
-                    echo "Checking Composer installation..."
-                    if ! [ -x "$(command -v composer)" ]; then
-                        curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-                    fi
-                    composer self-update
-
-                    echo "Installing Composer dependencies..."
-                    composer install --optimize-autoloader --ignore-platform-req=ext-curl || exit 1
-                '''
-            }
-        }
-
-        stage('Start Database') {
+        stage('Set APP_KEY & Migrate Database') {
             steps {
                 script {
-                    sh '''
-                        echo "Starting MySQL using Docker..."
-                        docker run --name mysql-container -e MYSQL_ROOT_PASSWORD= -e MYSQL_DATABASE=laravel -p 3306:3306 -d mysql:5.7
-                        sleep 10 # Tunggu MySQL siap
-                    '''
-                }
-            }
-        }
-
-        stage('Configure Environment') {
-            steps {
-                script {
-                    sh '''
-                        echo "Configuring Laravel environment..."
-                        cp .env.example .env
-
-                        sed -i 's|APP_ENV=.*|APP_ENV=testing|' .env
-                        sed -i 's|APP_URL=.*|APP_URL=http://localhost|' .env
-                        sed -i 's|DB_CONNECTION=.*|DB_CONNECTION=mysql|' .env
-                        sed -i 's|DB_HOST=.*|DB_HOST=127.0.0.1|' .env
-                        sed -i 's|DB_PORT=.*|DB_PORT=3306|' .env
-                        sed -i 's|DB_DATABASE=.*|DB_DATABASE=laravel|' .env
-                        sed -i 's|DB_USERNAME=.*|DB_USERNAME=root|' .env
-                        sed -i 's|DB_PASSWORD=.*|DB_PASSWORD=|' .env
-
-                        php artisan key:generate
-                    '''
+                    docker.image('php:8.2-cli').inside('--network=laravel-network -u root') {
+                        sh '''
+                            php artisan key:generate
+                            php artisan config:clear
+                            php artisan cache:clear
+                            php artisan migrate --force
+                        '''
+                    }
                 }
             }
         }
@@ -88,68 +66,29 @@ pipeline {
         stage('Run Tests') {
             steps {
                 script {
-                    def testsFailed = false
-                    try {
-                        sh '''
-                            echo "Preparing application for testing..."
-                            php artisan config:clear
-                            php artisan cache:clear
-                            php artisan config:cache
-                            php artisan migrate --force || exit 1
-
-                            echo "Running Laravel tests..."
-                            if [ -f artisan ]; then
-                                php artisan test || testsFailed=true
-                            fi
-
-                            echo "Running PHPUnit tests..."
-                            if [ -x vendor/bin/phpunit ]; then
-                                ./vendor/bin/phpunit || testsFailed=true
-                            else
-                                echo "PHPUnit not found, skipping tests."
-                                testsFailed=true
-                            fi
-                        '''
-                    } catch (Exception e) {
-                        testsFailed = true
-                    }
-
-                    if (testsFailed) {
-                        echo "Tests failed, marking build as FAILED."
-                        currentBuild.result = 'FAILURE'
-                        error("Stopping pipeline due to failed tests.")
+                    docker.image('php:8.2-cli').inside('--network=laravel-network -u root') {
+                        sh 'php artisan test'
                     }
                 }
             }
         }
 
-        stage('Deploy to Production') {
-            when {
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-            }
+        stage('Deploy') {
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_TOKEN')]) {
-                    sh '''
-                        echo "Deploying application..."
-                        mkdir -p ${DEPLOY_DIR}
-                        rsync -avz --delete --exclude '.env' --exclude 'storage/' --exclude 'vendor/' --exclude '.git' . ${DEPLOY_DIR} || exit 1
-                        
-                        cd ${DEPLOY_DIR}
-                        composer install --no-dev --optimize-autoloader || exit 1
-                        
-                        php artisan migrate --force || exit 1
-                        php artisan config:clear
-                        php artisan cache:clear
-                        php artisan config:cache
-                        php artisan route:cache
-                        php artisan view:cache
-                        php artisan storage:link || true
-                        php artisan queue:restart || true
-                        
-                        chown -R www-data:www-data ${DEPLOY_DIR}
-                        chmod -R 775 ${DEPLOY_DIR}/storage ${DEPLOY_DIR}/bootstrap/cache
-                    '''
+                script {
+                    docker.image('debian').inside('-u root') {  // Ubah dari Ubuntu ke Debian
+                        sh 'echo "Deploying Laravel Application on Debian"'
+                    }
                 }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                sh 'docker stop mysql-container || true'
+                sh 'docker network rm laravel-network || true'
             }
         }
     }
