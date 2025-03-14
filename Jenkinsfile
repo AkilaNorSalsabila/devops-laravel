@@ -51,6 +51,18 @@ pipeline {
             }
         }
 
+        stage('Start Database') {
+            steps {
+                script {
+                    sh '''
+                        echo "Starting MySQL using Docker..."
+                        docker run --name mysql-container -e MYSQL_ROOT_PASSWORD= -e MYSQL_DATABASE=laravel -p 3306:3306 -d mysql:5.7
+                        sleep 10 # Tunggu MySQL siap
+                    '''
+                }
+            }
+        }
+
         stage('Configure Environment') {
             steps {
                 script {
@@ -79,9 +91,6 @@ pipeline {
                     def testsFailed = false
                     try {
                         sh '''
-                            echo "Starting MySQL service..."
-                            service mysql start || echo "Failed to start MySQL"
-
                             echo "Preparing application for testing..."
                             php artisan config:clear
                             php artisan cache:clear
