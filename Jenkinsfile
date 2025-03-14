@@ -6,7 +6,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        sh 'git clone https://$GITHUB_TOKEN@github.com/AkilaNorSalsabila/devops-laravel.git'
+                        sh 'git clone --branch main https://$GITHUB_TOKEN@github.com/AkilaNorSalsabila/devops-laravel.git .'
                     }
                 }
             }
@@ -29,13 +29,12 @@ pipeline {
         stage('Testing') {
             agent {
                 docker {
-                    image 'debian:latest'
+                    image 'agung3wi/alpine-rsync:1.1'
                     args '-u root'
                 }
             }
             steps {
                 sh 'echo "Menjalankan testing di Debian..."'
-                // Tambahkan testing sesuai kebutuhan, contoh PHPUnit atau lainnya
             }
         }
 
@@ -47,13 +46,8 @@ pipeline {
                 }
             }
             steps {
-                script {
-                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        sh 'curl -X POST -H "Authorization: token $GITHUB_TOKEN" \
-                            -H "Accept: application/vnd.github.v3+json" \
-                            https://api.github.com/repos/AkilaNorSalsabila/devops-laravel/actions/workflows/deploy.yml/dispatches \
-                            -d "{\\"ref\\":\\"main\\"}"'
-                    }
+                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    sh 'rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/'
                 }
             }
         }
