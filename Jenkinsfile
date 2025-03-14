@@ -37,7 +37,9 @@ pipeline {
                     echo "Installing required dependencies..."
                     apt-get update && apt-get install -y unzip git curl zip \
                         libzip-dev libonig-dev libpng-dev libjpeg-dev \
-                        libfreetype6-dev libxml2-dev php8.2-curl || echo "Failed to install dependencies"
+                        libfreetype6-dev libxml2-dev php8.2-curl php8.2-mbstring \
+                        php8.2-xml php8.2-tokenizer php8.2-dom php8.2-zip php8.2-bcmath \
+                        php8.2-xmlwriter rsync || echo "Failed to install dependencies"
 
                     echo "Checking Composer installation..."
                     if ! [ -x "$(command -v composer)" ]; then
@@ -88,7 +90,7 @@ pipeline {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_CREDENTIALS')]) {
+                withCredentials([usernamePassword(credentialsId: 'github-token', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD')]) {
                     sh '''
                         echo "Deploying application..."
                         mkdir -p ${DEPLOY_DIR}
