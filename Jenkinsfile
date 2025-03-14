@@ -1,12 +1,22 @@
 pipeline {
-    agent any  // Use any available agent
-    
+    agent any  // Gunakan agen yang tersedia
+
     stages {
         stage('Checkout') {
             steps {
                 script {
                     withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                        sh 'git clone https://$GITHUB_TOKEN@github.com/AkilaNorSalsabila/devops-laravel.git .'
+                        sh '''
+                        if [ -d ".git" ]; then
+                            echo "Repo sudah ada, melakukan git pull..."
+                            git reset --hard
+                            git clean -fd
+                            git pull origin main
+                        else
+                            echo "Repo belum ada, melakukan git clone..."
+                            git clone --branch main https://$GITHUB_TOKEN@github.com/AkilaNorSalsabila/devops-laravel.git .
+                        fi
+                        '''
                     }
                 }
             }
