@@ -11,7 +11,7 @@ pipeline {
         stage('Cleanup Workspace') {
             steps {
                 script {
-                    deleteDir() // Bersihkan workspace sebelum checkout ulang
+                    deleteDir()
                 }
             }
         }
@@ -21,7 +21,7 @@ pipeline {
                 script {
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: '*/main']], // Ganti dengan branch yang diinginkan
+                        branches: [[name: '*/main']],
                         userRemoteConfigs: [[
                             url: "${GIT_REPO}",
                             credentialsId: 'github-token'
@@ -32,12 +32,6 @@ pipeline {
         }
 
         stage('Install Dependencies') {
-            agent {
-                docker {
-                    image 'php:8.2-cli'
-                    args '--user root'
-                }
-            }
             steps {
                 sh '''
                     echo "Updating system and installing required dependencies..."
@@ -46,8 +40,10 @@ pipeline {
                         && docker-php-ext-configure zip \
                         && docker-php-ext-install zip gd mbstring pdo pdo_mysql intl xml
 
-                    echo "Updating Composer and installing dependencies..."
-                    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+                    echo "Checking Composer installation..."
+                    if ! [ -x "$(command -v composer)" ]; then
+                        curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+                    fi
                     composer self-update
                     composer install --no-dev --optimize-autoloader
                 '''
@@ -76,11 +72,9 @@ pipeline {
                         php artisan route:cache
                         php artisan view:cache
                         php artisan storage:link || true
-                        php artisan migrate --force
                         php artisan queue:restart
                         chown -R www-data:www-data ${DEPLOY_DIR}
                         chmod -R 775 ${DEPLOY_DIR}/storage ${DEPLOY_DIR}/bootstrap/cache
-                        systemctl restart php8.2-fpm
                     '''
                 }
             }
