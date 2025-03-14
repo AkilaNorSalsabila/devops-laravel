@@ -1,10 +1,6 @@
 pipeline {
-    agent any
-
-    environment {
-        COMPOSER_ALLOW_SUPERUSER = '1'
-    }
-
+    agent any  // Use any available agent
+    
     stages {
         stage('Checkout') {
             steps {
@@ -17,16 +13,28 @@ pipeline {
         }
 
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'php:8.2-cli'
+                    args '--user root'
+                }
+            }
             steps {
-                sh 'sudo apt-get update && sudo apt-get install -y unzip git'
+                sh 'apt-get update && apt-get install -y unzip git'
                 sh 'rm -f composer.lock'
                 sh 'composer install --no-interaction --prefer-dist --no-progress'
             }
         }
 
         stage('Testing') {
+            agent {
+                docker {
+                    image 'php:8.2-cli'
+                    args '--user root'
+                }
+            }
             steps {
-                sh 'echo "Menjalankan testing di Jenkins agent..."'
+                sh 'echo "Menjalankan testing di Debian..."'
             }
         }
 
