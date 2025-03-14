@@ -4,7 +4,11 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                script {
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                        sh 'git clone https://${GITHUB_TOKEN}@github.com/AkilaNorSalsabila/devops-laravel.git'
+                    }
+                }
             }
         }
 
@@ -43,10 +47,16 @@ pipeline {
                 }
             }
             steps {
-                sshagent (credentials: ['ssh-prod']) {
-                    sh 'mkdir -p ~/.ssh'
-                    sh 'ssh-keyscan -H "$PROD_HOST" > ~/.ssh/known_hosts'
-                    sh 'rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/'
+                script {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'ssh-prod', keyFileVariable: 'SSH_KEY')]) {
+                        sh '''
+                        mkdir -p ~/.ssh
+                        echo "$SSH_KEY" > ~/.ssh/id_rsa
+                        chmod 600 ~/.ssh/id_rsa
+                        ssh-keyscan -H "$PROD_HOST" >> ~/.ssh/known_hosts
+                        rsync -rav --delete ./laravel/ ubuntu@$PROD_HOST:/home/ubuntu/prod.kelasdevops.xyz/
+                        '''
+                    }
                 }
             }
         }
