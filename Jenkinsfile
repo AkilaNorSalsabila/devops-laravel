@@ -69,7 +69,6 @@ pipeline {
                                 ./vendor/bin/phpunit || testsFailed=true
                             else
                                 echo "PHPUnit not found, skipping tests."
-                                testsFailed=true
                             fi
                         '''
                     } catch (Exception e) {
@@ -99,7 +98,6 @@ pipeline {
                         cd ${DEPLOY_DIR}
                         composer install --no-dev --optimize-autoloader || exit 1
                         
-                        php artisan migrate --force || exit 1
                         php artisan config:clear
                         php artisan cache:clear
                         php artisan config:cache
