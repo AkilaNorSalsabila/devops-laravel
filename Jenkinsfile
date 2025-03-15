@@ -63,7 +63,7 @@ pipeline {
                             if [ -f artisan ]; then
                                 php artisan test || testsFailed=true
                             fi
-                            
+
                             echo "Running PHPUnit tests..."
                             if [ -x vendor/bin/phpunit ]; then
                                 ./vendor/bin/phpunit || testsFailed=true
@@ -94,20 +94,17 @@ pipeline {
                         echo "Deploying application..."
                         mkdir -p ${DEPLOY_DIR}
                         rsync -avz --delete --exclude '.env' --exclude 'storage/' --exclude 'vendor/' --exclude '.git' . ${DEPLOY_DIR} || exit 1
-                        
+
                         cd ${DEPLOY_DIR}
                         composer install --no-dev --optimize-autoloader || exit 1
-                        
+
                         php artisan config:clear
-                        php artisan cache:clear
+                        php artisan cache:clear || true
                         php artisan config:cache
                         php artisan route:cache
-                        php artisan view:cache
-                        php artisan storage:link || true
-                        php artisan queue:restart || true
+                        php artisan view:cache || true
                         
-                        chown -R www-data:www-data ${DEPLOY_DIR}
-                        chmod -R 775 ${DEPLOY_DIR}/storage ${DEPLOY_DIR}/bootstrap/cache
+                        echo "Deployment completed successfully!"
                     '''
                 }
             }
