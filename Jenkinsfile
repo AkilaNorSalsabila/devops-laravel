@@ -37,6 +37,9 @@ pipeline {
                     echo "Updating system and installing required dependencies..."
                     sudo apt-get update || echo "Skipping sudo command"
 
+                    echo "Checking GitHub connectivity..."
+                    ping -c 3 github.com || echo "GitHub is unreachable, continuing..."
+
                     echo "Setting correct permissions for Composer..."
                     mkdir -p ${COMPOSER_HOME}
 
@@ -49,7 +52,7 @@ pipeline {
                     composer self-update --no-cache
 
                     echo "Installing Composer dependencies..."
-                    composer install --optimize-autoloader --ignore-platform-req=ext-curl || exit 1
+                    composer install --optimize-autoloader --ignore-platform-req=ext-curl --prefer-dist || composer install --prefer-source || exit 1
                 '''
             }
         }
@@ -63,6 +66,7 @@ pipeline {
                     fi
                     if ! grep -q "APP_KEY=" .env || [ -z "$(grep 'APP_KEY=' .env | cut -d '=' -f2)" ]; then
                         php artisan key:generate
+                        php artisan config:clear
                     fi
                 '''
             }
@@ -74,12 +78,12 @@ pipeline {
                     echo "Running Laravel tests..."
                     set -e  # Jika ada error, langsung keluar
                     if [ -f artisan ]; then
-                        php artisan test
+                        php artisan test || exit 1
                     fi
 
                     echo "Running PHPUnit tests..."
                     if [ -x vendor/bin/phpunit ]; then
-                        ./vendor/bin/phpunit
+                        ./vendor/bin/phpunit || exit 1
                     else
                         echo "PHPUnit not found, skipping tests."
                     fi
@@ -96,10 +100,12 @@ pipeline {
                     echo "Deploying application..."
                     sudo mkdir -p ${DEPLOY_DIR}
                     sudo chown -R jenkins:jenkins ${DEPLOY_DIR}
-                    rsync -avz --delete --exclude '.env' --exclude 'storage/' --exclude 'vendor/' --exclude '.git' . ${DEPLOY_DIR} || exit 1
+
+                    echo "Syncing files to ${DEPLOY_DIR}..."
+                    rsync -avz --delete --exclude-from='.rsync-exclude' . ${DEPLOY_DIR} || exit 1
 
                     cd ${DEPLOY_DIR}
-                    composer install --no-dev --optimize-autoloader || exit 1
+                    sudo -u jenkins composer install --no-dev --optimize-autoloader || exit 1
 
                     php artisan config:clear
                     php artisan cache:clear || true
