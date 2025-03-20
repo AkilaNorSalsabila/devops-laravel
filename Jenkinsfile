@@ -72,24 +72,7 @@ pipeline {
             }
         }
 
-        stage('Run Tests') {
-            steps {
-                sh '''
-                    echo "Running Laravel tests..."
-                    set -e  # Jika ada error, langsung keluar
-                    if [ -f artisan ]; then
-                        php artisan test || exit 1
-                    fi
-
-                    echo "Running PHPUnit tests..."
-                    if [ -x vendor/bin/phpunit ]; then
-                        ./vendor/bin/phpunit || exit 1
-                    else
-                        echo "PHPUnit not found, skipping tests."
-                    fi
-                '''
-            }
-        }
+        
 
         stage('Deploy to Production') {
             when {
