@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel'
-        DEPLOY_DIR = '/var/www/devops-laravel' // Lokasi deploy yang lebih aman
+        DEPLOY_DIR = '/var/www/devops-laravel'
         COMPOSER_HOME = "${WORKSPACE}/.composer"
     }
 
@@ -34,25 +34,16 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    echo "Updating system and installing required dependencies..."
+                    echo "Updating system packages..."
                     sudo apt-get update || echo "Skipping sudo command"
 
-                    echo "Checking GitHub connectivity..."
-                    ping -c 3 github.com || echo "GitHub is unreachable, continuing..."
-
-                    echo "Setting correct permissions for Composer..."
-                    mkdir -p ${COMPOSER_HOME}
-
-                    echo "Checking Composer installation..."
+                    echo "Ensuring Composer is installed..."
                     if ! [ -x "$(command -v composer)" ]; then
                         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
                     fi
 
-                    echo "Updating Composer..."
-                    composer self-update --no-cache
-
-                    echo "Installing Composer dependencies..."
-                    composer install --optimize-autoloader --ignore-platform-req=ext-curl --prefer-dist || composer install --prefer-source || exit 1
+                    echo "Installing PHP dependencies..."
+                    composer install --optimize-autoloader --ignore-platform-req=ext-curl --prefer-dist || exit 1
                 '''
             }
         }
@@ -60,10 +51,8 @@ pipeline {
         stage('Set Application Key') {
             steps {
                 sh '''
-                    echo "Checking and setting Laravel APP_KEY..."
-                    if [ ! -f .env ]; then
-                        cp .env.example .env
-                    fi
+                    echo "Configuring Laravel environment..."
+                    [ ! -f .env ] && cp .env.example .env
                     if ! grep -q "APP_KEY=" .env || [ -z "$(grep 'APP_KEY=' .env | cut -d '=' -f2)" ]; then
                         php artisan key:generate
                         php artisan config:clear
@@ -72,30 +61,29 @@ pipeline {
             }
         }
 
-        
-
         stage('Deploy to Production') {
             when {
                 expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
             }
             steps {
                 sh '''
-                    echo "Deploying application..."
+                    echo "Preparing deployment..."
                     sudo mkdir -p ${DEPLOY_DIR}
                     sudo chown -R jenkins:jenkins ${DEPLOY_DIR}
 
-                    echo "Syncing files to ${DEPLOY_DIR}..."
-                    rsync -avz --delete --exclude-from='.rsync-exclude' . ${DEPLOY_DIR} || exit 1
+                    echo "Deploying application..."
+                    rsync -avz --delete . ${DEPLOY_DIR} || exit 1
 
+                    echo "Running post-deployment setup..."
                     cd ${DEPLOY_DIR}
                     sudo -u jenkins composer install --no-dev --optimize-autoloader || exit 1
 
                     php artisan config:clear
-                    php artisan cache:clear || true
+                    php artisan cache:clear
                     php artisan config:cache
                     php artisan route:cache
-                    php artisan view:cache || true
-                    
+                    php artisan view:cache
+
                     echo "Deployment completed successfully!"
                 '''
             }
