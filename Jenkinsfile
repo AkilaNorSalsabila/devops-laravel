@@ -35,7 +35,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Updating system and installing required dependencies..."
-                    sudo -n apt-get update || echo "Skipping sudo command"
+                    sudo apt-get update || echo "Skipping sudo command"
 
                     echo "Setting correct permissions for Composer..."
                     mkdir -p ${COMPOSER_HOME}
@@ -50,6 +50,20 @@ pipeline {
 
                     echo "Installing Composer dependencies..."
                     composer install --optimize-autoloader --ignore-platform-req=ext-curl || exit 1
+                '''
+            }
+        }
+
+        stage('Set Application Key') {
+            steps {
+                sh '''
+                    echo "Checking and setting Laravel APP_KEY..."
+                    if [ ! -f .env ]; then
+                        cp .env.example .env
+                    fi
+                    if ! grep -q "APP_KEY=" .env || [ -z "$(grep 'APP_KEY=' .env | cut -d '=' -f2)" ]; then
+                        php artisan key:generate
+                    fi
                 '''
             }
         }
