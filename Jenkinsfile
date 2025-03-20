@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel'
-        DEPLOY_DIR = '/home/akilanor/deploy-directory'
+        DEPLOY_DIR = '/var/www/devops-laravel' // Lokasi deploy yang lebih aman
         COMPOSER_HOME = "${WORKSPACE}/.composer"
     }
 
@@ -56,32 +56,20 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                script {
-                    def testsFailed = false
-                    try {
-                        sh '''
-                            echo "Running Laravel tests..."
-                            if [ -f artisan ]; then
-                                php artisan test || testsFailed=true
-                            fi
+                sh '''
+                    echo "Running Laravel tests..."
+                    set -e  # Jika ada error, langsung keluar
+                    if [ -f artisan ]; then
+                        php artisan test
+                    fi
 
-                            echo "Running PHPUnit tests..."
-                            if [ -x vendor/bin/phpunit ]; then
-                                ./vendor/bin/phpunit || testsFailed=true
-                            else
-                                echo "PHPUnit not found, skipping tests."
-                            fi
-                        '''
-                    } catch (Exception e) {
-                        testsFailed = true
-                    }
-
-                    if (testsFailed) {
-                        echo "Tests failed, marking build as FAILED."
-                        currentBuild.result = 'FAILURE'
-                        error("Stopping pipeline due to failed tests.")
-                    }
-                }
+                    echo "Running PHPUnit tests..."
+                    if [ -x vendor/bin/phpunit ]; then
+                        ./vendor/bin/phpunit
+                    else
+                        echo "PHPUnit not found, skipping tests."
+                    fi
+                '''
             }
         }
 
@@ -92,7 +80,8 @@ pipeline {
             steps {
                 sh '''
                     echo "Deploying application..."
-                    mkdir -p ${DEPLOY_DIR}
+                    sudo mkdir -p ${DEPLOY_DIR}
+                    sudo chown -R jenkins:jenkins ${DEPLOY_DIR}
                     rsync -avz --delete --exclude '.env' --exclude 'storage/' --exclude 'vendor/' --exclude '.git' . ${DEPLOY_DIR} || exit 1
 
                     cd ${DEPLOY_DIR}
