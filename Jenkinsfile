@@ -4,7 +4,7 @@ pipeline {
     environment {
         GIT_REPO = 'https://github.com/AkilaNorSalsabila/devops-laravel'
         DEPLOY_DIR = '/home/akilanor/deploy-directory'
-        COMPOSER_HOME = '/var/lib/jenkins/.composer'
+        COMPOSER_HOME = "${WORKSPACE}/.composer"
     }
 
     stages {
@@ -35,15 +35,10 @@ pipeline {
             steps {
                 sh '''
                     echo "Updating system and installing required dependencies..."
-                    sudo apt-get update && sudo apt-get install -y unzip git curl zip \
-                        libzip-dev libonig-dev libpng-dev libjpeg-dev \
-                        libfreetype6-dev libxml2-dev php8.2-curl php8.2-mbstring \
-                        php8.2-xml php8.2-tokenizer php8.2-dom php8.2-zip php8.2-bcmath \
-                        php8.2-xmlwriter rsync || echo "Failed to install dependencies"
+                    sudo -n apt-get update || echo "Skipping sudo command"
 
                     echo "Setting correct permissions for Composer..."
                     mkdir -p ${COMPOSER_HOME}
-                    sudo chown -R jenkins:jenkins ${COMPOSER_HOME}
 
                     echo "Checking Composer installation..."
                     if ! [ -x "$(command -v composer)" ]; then
