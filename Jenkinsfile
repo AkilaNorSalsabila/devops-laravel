@@ -8,14 +8,6 @@ pipeline {
     }
 
     stages {
-        stage('Cleanup Workspace') {
-            steps {
-                script {
-                    deleteDir()
-                }
-            }
-        }
-
         stage('Checkout') {
             steps {
                 script {
@@ -27,6 +19,7 @@ pipeline {
                             credentialsId: 'github-token'
                         ]]
                     ])
+                    sh 'git reset --hard'  // Pastikan workspace selalu bersih
                 }
             }
         }
@@ -42,8 +35,14 @@ pipeline {
                         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
                     fi
 
+                    echo "Checking for composer.json..."
+                    if [ ! -f composer.json ]; then
+                        echo "ERROR: composer.json not found!"
+                        exit 1
+                    fi
+
                     echo "Installing PHP dependencies..."
-                    composer install --optimize-autoloader --ignore-platform-req=ext-curl --prefer-dist || exit 1
+                    composer install --no-dev --optimize-autoloader || exit 1
                 '''
             }
         }
@@ -67,9 +66,16 @@ pipeline {
             }
             steps {
                 sh '''
+                    echo "Checking if rsync is installed..."
+                    if ! [ -x "$(command -v rsync)" ]; then
+                        echo "ERROR: rsync not found!"
+                        exit 1
+                    fi
+
                     echo "Preparing deployment..."
                     sudo mkdir -p ${DEPLOY_DIR}
                     sudo chown -R jenkins:jenkins ${DEPLOY_DIR}
+                    sudo chmod -R 775 ${DEPLOY_DIR}
 
                     echo "Deploying application..."
                     rsync -avz --delete . ${DEPLOY_DIR} || exit 1
