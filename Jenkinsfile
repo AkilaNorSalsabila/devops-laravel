@@ -27,22 +27,22 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                    echo "Updating system packages..."
+                    echo "🔄 Updating system packages..."
                     sudo apt-get update || echo "Skipping sudo command"
 
-                    echo "Ensuring Composer is installed..."
+                    echo "🔎 Checking for Composer..."
                     if ! [ -x "$(command -v composer)" ]; then
                         curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
                     fi
 
-                    echo "Checking for composer.json..."
+                    echo "📂 Checking for composer.json..."
                     if [ ! -f composer.json ]; then
-                        echo "ERROR: composer.json not found!"
+                        echo "❌ ERROR: composer.json not found!"
                         exit 1
                     fi
 
-                    echo "Installing PHP dependencies..."
-                    composer install --no-dev --optimize-autoloader || exit 1
+                    echo "⚡ Installing PHP dependencies..."
+                    composer update --no-dev --optimize-autoloader || exit 1
                 '''
             }
         }
@@ -50,7 +50,7 @@ pipeline {
         stage('Set Application Key') {
             steps {
                 sh '''
-                    echo "Configuring Laravel environment..."
+                    echo "🔑 Configuring Laravel environment..."
                     [ ! -f .env ] && cp .env.example .env
                     if ! grep -q "APP_KEY=" .env || [ -z "$(grep 'APP_KEY=' .env | cut -d '=' -f2)" ]; then
                         php artisan key:generate
@@ -66,31 +66,41 @@ pipeline {
             }
             steps {
                 sh '''
-                    echo "Checking if rsync is installed..."
+                    echo "🚀 Checking if rsync is installed..."
                     if ! [ -x "$(command -v rsync)" ]; then
-                        echo "ERROR: rsync not found!"
+                        echo "❌ ERROR: rsync not found!"
                         exit 1
                     fi
 
-                    echo "Preparing deployment..."
+                    echo "📁 Preparing deployment..."
                     sudo mkdir -p ${DEPLOY_DIR}
-                    sudo chown -R jenkins:jenkins ${DEPLOY_DIR}
+                    sudo chown -R jenkins:www-data ${DEPLOY_DIR}
                     sudo chmod -R 775 ${DEPLOY_DIR}
 
-                    echo "Deploying application..."
+                    echo "📦 Deploying application..."
                     rsync -avz --delete . ${DEPLOY_DIR} || exit 1
 
-                    echo "Running post-deployment setup..."
+                    echo "🔧 Fixing permissions after rsync..."
+                    sudo chown -R jenkins:www-data ${DEPLOY_DIR}
+                    sudo chmod -R 775 ${DEPLOY_DIR}
+
+                    echo "🛠️ Running post-deployment setup..."
                     cd ${DEPLOY_DIR}
-                    sudo -u jenkins composer install --no-dev --optimize-autoloader || exit 1
+                    
+                    if [ -x "$(command -v php)" ] && [ -f artisan ]; then
+                        sudo -u jenkins composer install --no-dev --optimize-autoloader || exit 1
 
-                    php artisan config:clear
-                    php artisan cache:clear
-                    php artisan config:cache
-                    php artisan route:cache
-                    php artisan view:cache
+                        php artisan config:clear
+                        php artisan cache:clear
+                        php artisan config:cache
+                        php artisan route:cache
+                        php artisan view:cache
 
-                    echo "Deployment completed successfully!"
+                        echo "✅ Deployment completed successfully!"
+                    else
+                        echo "❌ ERROR: Laravel is not properly installed!"
+                        exit 1
+                    fi
                 '''
             }
         }
